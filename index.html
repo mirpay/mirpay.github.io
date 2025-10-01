@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Симулятор Платежного Терминала - Финальная Версия</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sber-green: #30B854;
+            --bg-dark: #20232B;
+            --card-dark: #2C2F3A;
+            --text-light: #FFFFFF;
+            --text-secondary: #9E9E9E;
+            --terminal-bg: #F5F5F5;
+            --terminal-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        }
+        body { margin: 0; font-family: 'Manrope', sans-serif; background-color: #333641; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: var(--text-light); user-select: none; }
+        .terminal-body { width: 380px; height: 520px; background: var(--terminal-bg); border-radius: 30px; padding: 15px; box-shadow: var(--terminal-shadow); position: relative; transition: all 0.5s ease; }
+        .terminal-screen { width: 100%; height: 100%; background-color: var(--bg-dark); border-radius: 20px; overflow: hidden; position: relative; box-shadow: inset 0 3px 15px rgba(0, 0, 0, 0.4); }
+        .screen-top-bar { position: absolute; top: 25px; left: 25px; right: 25px; z-index: 20; display: flex; justify-content: space-between; align-items: center; }
+        .pay-logo { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 4px 10px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+        .pay-logo svg { width: 16px; height: 16px; }
+        .nfc-switch { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+        .nfc-switch-label { cursor: pointer; width: 36px; height: 20px; background-color: #444; border-radius: 20px; position: relative; transition: background-color 0.2s; }
+        .nfc-switch-label::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background-color: #20232B; border: 1px solid #555; box-sizing: border-box; border-radius: 50%; transition: transform 0.2s; }
+        #nfc-toggle:checked + .nfc-switch-label { background-color: var(--sber-green); }
+        #nfc-toggle:checked + .nfc-switch-label::after { background-color: white; border: none; transform: translateX(16px); }
+        #nfc-toggle { display: none; }
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; box-sizing: border-box; padding: 25px; opacity: 0; visibility: hidden; transform: scale(0.98); filter: blur(5px); transition: opacity 0.35s ease, visibility 0.35s, transform 0.35s ease, filter 0.35s ease; }
+        .screen.active { opacity: 1; visibility: visible; transform: scale(1); filter: blur(0); }
+        
+        #screen-screensaver { justify-content: center; align-items: center; text-align: center; cursor: pointer; background: linear-gradient(160deg, #00554C, #2A7D3C); }
+        .screensaver-content { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .screensaver-title { font-size: 44px; font-weight: 800; line-height: 1.25; }
+        .screensaver-title div { display: flex; align-items: center; gap: 15px; }
+        .screensaver-icon { width: 36px; height: 36px; }
+        .screensaver-terminal-id { position: absolute; bottom: 25px; left: 25px; font-size: 12px; color: rgba(255,255,255,0.4); }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; padding-top: 45px; }
+        .payment-info .label { font-size: 16px; color: var(--text-secondary); }
+        .payment-info .amount { font-size: 28px; font-weight: 700; }
+        .close-btn { font-size: 28px; color: var(--text-secondary); cursor: pointer; line-height: 1; }
+        #screen-keypad { justify-content: flex-end; padding: 15px; padding-top: 65px; box-sizing: border-box; }
+        .keypad-display { flex-grow: 1; display: flex; align-items: center; justify-content: center; font-size: 52px; font-weight: 700; }
+        .keypad-display span { cursor: pointer; padding: 5px 0; border-bottom: 2px solid transparent; transition: border-color 0.2s; }
+        .keypad-display span.active { border-bottom-color: var(--sber-green); }
+        .keypad-display .currency { color: var(--text-secondary); }
+        .keypad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .keypad-btn { background-color: var(--card-dark); border: none; color: var(--text-light); border-radius: 16px; height: 60px; font-size: 24px; cursor: pointer; transition: transform 0.1s ease; }
+        .keypad-btn:active { transform: scale(0.92); }
+        .keypad-btn.confirm { grid-column: span 3; background-color: var(--sber-green); font-weight: 600; }
+        .keypad-btn.disabled { opacity: 0.5; pointer-events: none; }
+        #screen-pin-entry { justify-content: flex-end; padding: 15px; }
+        .pin-entry-container { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+        .pin-dots { display: flex; gap: 20px; }
+        .pin-dot { width: 16px; height: 16px; background-color: var(--card-dark); border-radius: 50%; transition: background-color 0.2s; }
+        .pin-dot.filled { background-color: var(--sber-green); }
+        #screen-face-scan { justify-content: center; align-items: center; text-align: center; }
+        .face-scan-container { position: relative; width: 250px; height: 250px; display: flex; justify-content: center; align-items: center; }
+        .face-scan-frame { position: absolute; width: 100%; height: 100%; border: 4px solid var(--sber-green); border-radius: 50%; animation: pulse-face 2s infinite ease-in-out, rotate-face 8s linear infinite; }
+        .face-scan-icon { width: 100px; height: 100px; color: var(--text-secondary); }
+        .face-scan-status { margin-top: 25px; font-size: 18px; font-weight: 500; min-height: 25px; transition: opacity 0.4s ease; }
+        .payment-grid { flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 15px; }
+        .grid-card { background: var(--card-dark); border-radius: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; text-align: center; gap: 12px; }
+        .grid-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+        .grid-card .icon { width: 44px; height: 44px; margin-bottom: 5px; }
+        .grid-card .label { font-size: 16px; font-weight: 500; line-height: 1.3; }
+        .face-pay-card { grid-row: span 2; background-color: var(--sber-green); border-radius: 24px; }
+        .face-pay-card .icon { width: 64px; height: 64px; }
+        .face-pay-card .label { font-size: 18px; }
+        .face-pay-card .label span { font-size: 24px; font-weight: 200; margin-left: 5px; }
+        
+        #screen-success, #screen-nfc-wait, #screen-processing { justify-content: center; align-items: center; text-align: center; }
+        .status-text { margin-top: 25px; font-size: 20px; font-weight: 500; }
+        .status-amount { margin-top: 10px; font-size: 16px; color: var(--text-secondary); }
+        
+        #screen-qr-display .main-content { flex-grow: 1; display: flex; justify-content: center; }
+        .qr-code-large { width: 220px; height: 220px; background: white; padding: 15px; border-radius: 24px; cursor: pointer; }
+        .qr-code-large svg, .icon svg { width: 100%; height: 100%; }
+        .processing-spinner { position: relative; width: 120px; height: 120px; margin-bottom: 15px; }
+        .processing-spinner .circle-bg { stroke: #333; fill: none; stroke-width: 8; }
+        .processing-spinner .circle-progress { stroke: var(--sber-green); fill: none; stroke-width: 8; stroke-linecap: round; transform-origin: 50% 50%; animation: spin 1.5s linear infinite; }
+        .processing-spinner .icon-lock { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; color: var(--text-secondary); }
+        .processing-status { font-size: 18px; font-weight: 500; min-height: 25px; transition: opacity 0.4s ease; }
+        .success-icon { width: 120px; height: 120px; }
+        .success-icon .circle { stroke-dasharray: 327; stroke-dashoffset: 327; animation: draw-circle 0.8s ease-out forwards; }
+        .success-icon .checkmark { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw-checkmark 0.5s 0.6s ease-out forwards; }
+        
+        @keyframes draw-circle { to { stroke-dashoffset: 0; } } @keyframes draw-checkmark { to { stroke-dashoffset: 0; } } @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-face { 0%, 100% { transform: scale(0.98); opacity: 0.7; } 50% { transform: scale(1.02); opacity: 1; } } @keyframes rotate-face { to { transform: rotate(360deg); } }
+        @keyframes rainbow { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes stars { 0%{transform:translateY(0)} 100%{transform:translateY(-1080px)} }
+        @keyframes glitch { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-3px, 3px); } 40% { transform: translate(-3px, -3px); } 60% { transform: translate(3px, 3px); } 80% { transform: translate(3px, -3px); } }
+        .theme-gold { --terminal-bg: linear-gradient(145deg, #FDEBCF, #E6C283); --terminal-shadow: 0 20px 60px rgba(230, 194, 131, 0.4); }
+        .theme-blue { --terminal-bg: linear-gradient(145deg, #B5E1FF, #5B9DFF); --terminal-shadow: 0 20px 60px rgba(91, 157, 255, 0.4); }
+        .theme-galaxy .terminal-screen { background: #000; }
+        .stars-bg { position: absolute; top: 0; left: 0; width: 100%; height: 200%; background-image: radial-gradient(white 1px, transparent 1.2px); background-size: 30px 30px; animation: stars 60s linear infinite; }
+        .theme-rainbow .terminal-body { background: linear-gradient(124deg, #ff2400, #e81d1d, #e8b71d, #e3e81d, #1de840, #1ddde8, #2b1de8, #dd00f3, #dd00f3); background-size: 1800% 1800%; animation: rainbow 18s ease infinite; }
+        .theme-secret .terminal-body { background: #111; animation: glitch 0.3s linear infinite; }
+        .theme-secret .terminal-screen { box-shadow: inset 0 0 20px #f0f, inset 0 0 40px #0ff; }
+    </style>
+</head>
+<body>
+    <div class="terminal-body" id="terminal-body">
+        <div class="terminal-screen">
+            <div id="stars-bg-container"></div>
+            <div class="screen-top-bar"></div>
+            <div class="screen active" id="screen-screensaver"></div>
+            <div class="screen" id="screen-keypad"></div>
+            <div class="screen" id="screen-pin-entry"></div>
+            <div class="screen" id="screen-payment-choice"></div>
+            <div class="screen" id="screen-face-scan"></div>
+            <div class="screen" id="screen-qr-display"></div>
+            <div class="screen" id="screen-success"></div>
+            <div class="screen" id="screen-nfc-wait"></div>
+            <div class="screen" id="screen-processing"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let rublesInput = "0", centsInput = "", currentPin = "", isEditingCents = false, numericAmount = 0, inactivityTimer;
+            const terminalBody = document.getElementById('terminal-body');
+            const topBar = document.querySelector('.screen-top-bar');
+
+            function showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === screenId));
+                const isOverlayScreen = ['screensaver', 'success', 'processing', 'face-scan'].includes(screenId.replace('screen-',''));
+                topBar.style.display = isOverlayScreen ? 'none' : 'flex';
+                resetInactivityTimer();
+                if (screenId === 'screen-success') {
+                    const successIcon = document.querySelector('#screen-success .success-icon');
+                    if (successIcon) { successIcon.style.animation = 'none'; void successIcon.offsetWidth; successIcon.style.animation = ''; }
+                    setTimeout(goToScreensaver, 2500);
+                }
+            }
+            function resetInactivityTimer() { clearTimeout(inactivityTimer); inactivityTimer = setTimeout(goToScreensaver, 15000); }
+            function goToScreensaver() {
+                rublesInput = "0"; centsInput = ""; isEditingCents = false; currentPin = "";
+                updateDisplay(); updatePinDisplay();
+                applyTheme(0);
+                showScreen('screen-screensaver');
+            }
+            function applyTheme(amount) {
+                terminalBody.className = 'terminal-body';
+                if (amount >= 15000000) terminalBody.classList.add('theme-secret');
+                else if (amount >= 10000000) terminalBody.classList.add('theme-rainbow');
+                else if (amount >= 5000000) { terminalBody.classList.add('theme-galaxy'); document.getElementById('stars-bg-container').innerHTML = `<div class="stars-bg"></div>`; }
+                else if (amount >= 2500000) terminalBody.classList.add('theme-blue');
+                else if (amount >= 1000000) terminalBody.classList.add('theme-gold');
+                else document.getElementById('stars-bg-container').innerHTML = '';
+            }
+            function updateDisplay() { const rublesDisplay = document.getElementById('rubles-display'); const centsDisplay = document.getElementById('cents-display'); rublesDisplay.textContent = parseInt(rublesInput, 10).toLocaleString('ru-RU'); centsDisplay.textContent = centsInput.padEnd(2, '0'); rublesDisplay.classList.toggle('active', !isEditingCents); centsDisplay.classList.toggle('active', isEditingCents); const total = parseInt(rublesInput + centsInput.padEnd(2,'0'), 10); document.getElementById('confirm-amount-btn').classList.toggle('disabled', total === 0); applyTheme(total); }
+            function handleAmountKeyPress(key) { resetInactivityTimer(); if (key === 'backspace') { if (isEditingCents) centsInput = centsInput.slice(0, -1); else { rublesInput = rublesInput.slice(0, -1) || "0"; } } else { if (isEditingCents) { if (centsInput.length < 2) centsInput += key; } else { if (rublesInput === "0") rublesInput = key; else if (rublesInput.length < 8) rublesInput += key; } } updateDisplay(); }
+            function updatePinDisplay() { document.querySelectorAll('.pin-dot').forEach((dot, index) => dot.classList.toggle('filled', index < currentPin.length)); }
+            function handlePinKeyPress(key) { resetInactivityTimer(); if (key === 'backspace') { currentPin = currentPin.slice(0, -1); } else if (currentPin.length < 4) { currentPin += key; } updatePinDisplay(); if (currentPin.length === 4) { setTimeout(proceedAfterPin, 200); } }
+            function resetKeypad() { rublesInput = "0"; centsInput = ""; isEditingCents = false; currentPin = ""; updateDisplay(); updatePinDisplay(); showScreen('screen-keypad'); }
+            function proceedAfterPin() { if(window.paymentMethod === 'face') { showScreen('screen-face-scan'); handleFaceScan(); } else if (document.getElementById('nfc-toggle').checked) { showScreen('screen-nfc-wait'); handleNfcPayment(); } else { processPayment(); } }
+            async function handleNfcPayment() { const nfcStatusText = document.getElementById('nfc-status-text'); if (!('NDEFReader' in window)) { nfcStatusText.textContent = "Web NFC не поддерживается"; setTimeout(processPayment, 2000); return; } try { const reader = new NDEFReader(); await reader.scan(); nfcStatusText.textContent = "Приложите NFC-метку"; reader.onreading = () => { nfcStatusText.textContent = "Метка прочитана!"; reader.onreading = null; setTimeout(processPayment, 500); }; } catch (error) { nfcStatusText.textContent = "Ошибка NFC"; setTimeout(processPayment, 2000); } }
+            function handleFaceScan() { const statusEl = document.getElementById('face-scan-status'); statusEl.textContent = "Посмотрите в камеру"; setTimeout(() => { statusEl.textContent = "Идет распознавание..."; setTimeout(processPayment, 2000); }, 1500); }
+            function processPayment() { const statusEl = document.getElementById('processing-status'); const statuses = ["Соединение с банком...", "Отправка данных...", "Обработка транзакции...", "Завершение..."]; let statusIndex = 0; showScreen('screen-processing'); function updateStatus() { statusEl.style.opacity = '0'; setTimeout(() => { statusEl.textContent = statuses[statusIndex]; statusEl.style.opacity = '1'; statusIndex++; }, 400); } updateStatus(); const statusInterval = setInterval(() => { if (statusIndex < statuses.length) { updateStatus(); } else { clearInterval(statusInterval); setTimeout(() => showScreen('screen-success'), 800); } }, 1200); }
+            
+            const staticContent = {
+                topBar: `<div class="pay-logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12.013 2.01a10 10 0 1 0 0 20a10 10 0 0 0 0-20zM8.47 11.233a.75.75 0 0 1 1.06 0l2.257 2.257l4.43-4.43a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-2.817-2.817a.75.75 0 0 1 0-1.06z" fill="#30B854"/></svg><span>Pay</span></div><div class="nfc-switch"><span>NFC</span><input type="checkbox" id="nfc-toggle"><label for="nfc-toggle" class="nfc-switch-label"></label></div>`,
+                screensaver: `<div class="screensaver-content"><div class="pay-logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12.013 2.01a10 10 0 1 0 0 20a10 10 0 0 0 0-20zM8.47 11.233a.75.75 0 0 1 1.06 0l2.257 2.257l4.43-4.43a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-2.817-2.817a.75.75 0 0 1 0-1.06z" fill="#FFF"/></svg><span>Pay</span></div><h1 class="screensaver-title">платите<div><svg class="screensaver-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="url(#p1)"/><path d="M11 18.286L15.75 23L25 14" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="p1" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop stop-color="#30B854"/><stop offset="1" stop-color="#229A44"/></linearGradient></defs></svg>как вам</div><div>удобно<svg class="screensaver-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="url(#p2)"/><path d="M11 18L15.75 22.5L25 13.5" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="p2" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse"><stop stop-color="#4CAF50"/><stop offset="1" stop-color="#30B854"/></linearGradient></defs></svg></div></h1></div><div class="screensaver-terminal-id">Терминал: 33880234</div>`,
+                keypad: `<div class="keypad-display"><span id="rubles-display">0</span>,<span id="cents-display">00</span><span class="currency">&nbsp;₽</span></div><div class="keypad-grid" id="amount-keypad-grid"><button class="keypad-btn" data-key="1">1</button><button class="keypad-btn" data-key="2">2</button><button class="keypad-btn" data-key="3">3</button><button class="keypad-btn" data-key="4">4</button><button class="keypad-btn" data-key="5">5</button><button class="keypad-btn" data-key="6">6</button><button class="keypad-btn" data-key="7">7</button><button class="keypad-btn" data-key="8">8</button><button class="keypad-btn" data-key="9">9</button><div></div><button class="keypad-btn" data-key="0">0</button><button class="keypad-btn" data-key="backspace">←</button><button class="keypad-btn confirm disabled" id="confirm-amount-btn">Оплатить</button></div>`,
+                pinEntry: `<div class="header"><div class="payment-info"><div class="label">Введите PIN-код</div><div class="amount" id="pin-amount-display"></div></div></div><div class="pin-entry-container"><div class="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div></div><div class="keypad-grid" id="pin-keypad-grid"><button class="keypad-btn" data-key="1">1</button><button class="keypad-btn" data-key="2">2</button><button class="keypad-btn" data-key="3">3</button><button class="keypad-btn" data-key="4">4</button><button class="keypad-btn" data-key="5">5</button><button class="keypad-btn" data-key="6">6</button><button class="keypad-btn" data-key="7">7</button><button class="keypad-btn" data-key="8">8</button><button class="keypad-btn" data-key="9">9</button><div></div><button class="keypad-btn" data-key="0">0</button><button class="keypad-btn" data-key="backspace">←</button></div>`,
+                paymentChoice: `<div class="header"><div class="payment-info"><div class="label">оплата</div><div class="amount" id="payment-amount-display"></div></div><div class="close-btn" data-target="screen-screensaver">×</div></div><div class="payment-grid"><div class="grid-card face-pay-card"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.5 10C8.32843 10 9 9.32843 9 8.5C9 7.67157 8.32843 7 7.5 7C6.67157 7 6 7.67157 6 8.5C6 9.32843 6.67157 10 7.5 10Z" fill="currentColor"/><path d="M16.5 10C17.3284 10 18 9.32843 18 8.5C18 7.67157 17.3284 7 16.5 7C15.6716 7 15 7.67157 15 8.5C15 9.32843 15.6716 10 16.5 10Z" fill="currentColor"/><path d="M16 13.5C16 13.5 15 15.5 12 15.5C9 15.5 8 13.5 8 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 12C2 7.286 2 4.929 3.464 3.464C4.93 2 7.286 2 12 2C16.714 2 19.071 2 20.536 3.464C22 4.93 22 7.286 22 12C22 16.714 22 19.071 20.536 20.536C19.071 22 16.714 22 12 22C7.286 22 4.93 22 3.464 20.536C2 19.071 2 16.714 2 12Z" stroke="currentColor" stroke-width="1.5"/></svg><div class="label">Оплатить<br>по лицу<span>&gt;</span></div></div><div class="grid-card card-button nfc-trigger"><svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 10H2V14H22V10Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 7C2 5.34315 3.34315 4 5 4H19C20.6569 4 22 5.34315 22 7V17C22 18.6569 20.6569 20 19 20H5C3.34315 20 2 18.6569 2 17V7ZM5 6H19C19.5523 6 20 6.44772 20 7V8H4V7C4 6.44772 4.44772 6 5 6ZM4 16V10H20V16H4Z" fill="currentColor"/></svg><span class="label">картой</span></div><div class="grid-card qr-button" data-target="screen-qr-display"><div class="icon"><svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" fill-rule="evenodd" d="M1 1h8v8H1V1zm2 2v4h4V3H3zm10-2h6v6h-6V1zm2 2v2h2V3h-2zM1 13h6v6H1v-6zm2 2v2h2v-2H3zm15-2h-2v2h-2v2h2v2h-2v2h2v-2h2v2h2v-2h-2v-2h2v-2h-2v-2zM13 1h2v2h-2V1zm0 12h2v2h-2v-2zm-2 2h2v2h-2v-2zm-2-4h2v2h-2v-2zm-2-2h2v2H7v-2zm-2-2h2v2H5V7zm-2-2h2v2H3V5zm10 4h2v2h-2v-2zm2 2h2v2h-2v-2zm-4 0h2v2h-2v-2zm-2-4h2v2H9V7zm2-2h2v2h-2V5zm-2-2h2v2H9V3z"/></svg></div><span class="label">QR</span></div></div>`,
+                qrDisplay: `<div class="header"><div class="payment-info"><div class="label">оплата</div><div class="amount" id="qr-amount-display"></div></div><div class="close-btn" data-target="screen-payment-choice">×</div></div><div class="main-content"><div class="qr-code-large qr-trigger"><svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path fill="#000" fill-rule="evenodd" d="M1 1h8v8H1V1zm2 2v4h4V3H3zm10-2h6v6h-6V1zm2 2v2h2V3h-2zM1 13h6v6H1v-6zm2 2v2h2v-2H3zm15-2h-2v2h-2v2h2v2h-2v2h2v-2h2v2h2v-2h-2v-2h2v-2h-2v-2zM13 1h2v2h-2V1zm0 12h2v2h-2v-2zm-2 2h2v2h-2v-2zm-2-4h2v2h-2v-2zm-2-2h2v2H7v-2zm-2-2h2v2H5V7zm-2-2h2v2H3V5zm10 4h2v2h-2v-2zm2 2h2v2h-2v-2zm-4 0h2v2h-2v-2zm-2-4h2v2H9V7zm2-2h2v2h-2V5zm-2-2h2v2H9V3z"/></svg></div></div>`,
+                success: `<svg class="success-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"><circle class="circle" cx="50" cy="50" r="46" stroke="var(--sber-green)" stroke-width="8"/><path class="checkmark" d="M30 52 L45 67 L72 35" stroke="var(--sber-green)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="status-text">Оплата прошла успешно</div><div class="status-amount" id="success-amount-display"></div>`,
+                nfcWait: `<svg class="nfc-wait-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 8.5C4 6.01472 6.01472 4 8.5 4H15.5C17.9853 4 20 6.01472 20 8.5V15.5C20 17.9853 17.9853 20 15.5 20H8.5C6.01472 20 4 17.9853 4 15.5V8.5Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 16V8L12 16V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 16V8L15.1111 9.77778C14.6667 10.6667 14.2222 11.5556 14 12C13.7778 12.4444 13.3333 13.3333 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="status-text" id="nfc-status-text">Приложите NFC-метку</div><div class="status-amount" id="nfc-amount-display"></div>`,
+                processing: `<div class="processing-spinner"><svg class="icon-lock" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 10H7C5.34315 10 4 11.3431 4 13V19C4 20.6569 5.34315 22 7 22H17C18.6569 22 20 20.6569 20 19V13C20 11.3431 18.6569 10 17 10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 14V18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10V6C16 3.79086 14.2091 2 12 2C9.79086 2 8 3.79086 8 6V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><svg viewBox="0 0 100 100" style="width:100%; height:100%;"><circle class="circle-bg" cx="50" cy="50" r="46"></circle><circle class="circle-progress" cx="50" cy="50" r="46" stroke-dasharray="289" stroke-dashoffset="217"></circle></svg></div><div class="processing-status" id="processing-status"></div><div class="status-amount" id="processing-amount-display"></div>`,
+                faceScan: `<div class="header"><div class="payment-info"><div class="label">Оплата по лицу</div><div class="amount" id="face-scan-amount-display"></div></div></div><div class="face-scan-container"><div class="face-scan-frame"></div><svg class="face-scan-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7.5 10C8.32843 10 9 9.32843 9 8.5C9 7.67157 8.32843 7 7.5 7C6.67157 7 6 7.67157 6 8.5C6 9.32843 6.67157 10 7.5 10Z" fill="currentColor"/><path d="M16.5 10C17.3284 10 18 9.32843 18 8.5C18 7.67157 17.3284 7 16.5 7C15.6716 7 15 7.67157 15 8.5C15 9.32843 15.6716 10 16.5 10Z" fill="currentColor"/><path d="M16 13.5C16 13.5 15 15.5 12 15.5C9 15.5 8 13.5 8 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 12C2 7.286 2 4.929 3.464 3.464C4.93 2 7.286 2 12 2C16.714 2 19.071 2 20.536 3.464C22 4.93 22 7.286 22 12C22 16.714 22 19.071 20.536 20.536C19.071 22 16.714 22 12 22C7.286 22 4.93 22 3.464 20.536C2 19.071 2 16.714 2 12Z" stroke="currentColor" stroke-width="1.5"/></svg></div><div class="face-scan-status" id="face-scan-status">Посмотрите в камеру</div>`
+            };
+
+            document.querySelector('.screen-top-bar').innerHTML = staticContent.topBar;
+            for (const key in staticContent) {
+                if (key !== 'topBar') {
+                    const screenId = `screen-${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+                    const screenElement = document.getElementById(screenId);
+                    if (screenElement) {
+                        screenElement.innerHTML = staticContent[key];
+                    }
+                }
+            }
+            
+            function setupEventListeners() { document.getElementById('amount-keypad-grid').addEventListener('click', e => { if (e.target.dataset.key) handleAmountKeyPress(e.target.dataset.key); }); document.getElementById('pin-keypad-grid').addEventListener('click', e => { if (e.target.dataset.key) handlePinKeyPress(e.target.dataset.key); }); document.getElementById('rubles-display').addEventListener('click', () => { resetInactivityTimer(); isEditingCents = false; updateDisplay(); }); document.getElementById('cents-display').addEventListener('click', () => { resetInactivityTimer(); isEditingCents = true; centsInput = ""; updateDisplay(); }); document.getElementById('confirm-amount-btn').addEventListener('click', () => { const confirmBtn = document.getElementById('confirm-amount-btn'); if (confirmBtn.classList.contains('disabled')) return; const finalAmount = `${parseInt(rublesInput, 10).toLocaleString('ru-RU')},${centsInput.padEnd(2,'0')} ₽`; numericAmount = parseInt(rublesInput + centsInput.padEnd(2,'0'), 10); ['payment-amount-display', 'qr-amount-display', 'pin-amount-display', 'processing-amount-display', 'nfc-amount-display', 'success-amount-display', 'face-scan-amount-display'].forEach(id => {const el = document.getElementById(id); if(el) el.textContent = finalAmount}); showScreen('screen-payment-choice'); }); document.body.addEventListener('click', e => { if (e.target.closest('#screen-screensaver')) { resetKeypad(); return; } const target = e.target.closest('[data-target]'); if (target) { e.stopPropagation(); const screenId = target.dataset.target; if (screenId === 'screen-screensaver') goToScreensaver(); else showScreen(screenId); } const faceTrigger = e.target.closest('.face-pay-card'); const nfcTrigger = e.target.closest('.nfc-trigger'); if (faceTrigger || nfcTrigger) { window.paymentMethod = faceTrigger ? 'face' : 'nfc'; if (numericAmount >= 100000) { showScreen('screen-pin-entry'); } else { proceedAfterPin(); } } if (e.target.closest('.qr-trigger')) { processPayment(); } }); }
+            setupEventListeners();
+            goToScreensaver();
+        });
+    </script>
+</body>
+</html>
